@@ -1,0 +1,20 @@
+{
+    "moder": {
+        "name": "moder",
+        "permit": "moder",
+        "type": "default",
+        "info": {
+            "require_tripcode": true
+        },
+        "users": {}
+    },
+    "dj": {
+        "name": "dj",
+        "permit": "dj",
+        "type": "default",
+        "info": {
+            "require_tripcode": false
+        },
+        "users": {}
+    }
+}
