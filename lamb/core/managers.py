@@ -92,6 +92,13 @@ class HooksManager(BaseEntitiesManager['BaseHook', 'BaseHookWrapper']):
     def hooks(self):
         return self.entities
 
+    def yield_hooks(self):
+        for key in self.hooks.copy():
+            try:
+                yield self.hooks[key]
+            except KeyError:
+                continue
+
     def run_all(self, meth_name: str, *args, **kwargs):
         for hook_container in self.hooks.values():
             meth = hook_container.get_method(meth_name)
