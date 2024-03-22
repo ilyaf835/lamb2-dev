@@ -67,7 +67,7 @@ class SelectorDemuxer(BaseSelector):
         return self.target_selector
 
     def __exit__(self, *args):
-        self.target_selector.close()
+        self.close()
 
     def __getattr__(self, key: str):
         return getattr(self.target_selector, key)
