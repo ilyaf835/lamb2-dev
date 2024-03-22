@@ -51,6 +51,7 @@ class AsyncioBackend:
         for task in tasks:
             task._log_destroy_pending = False                                         # type: ignore
             task.cancel()
+            asyncio.tasks._unregister_task(task)
         for handle in self.loop._ready:                                               # type: ignore
             if keep_callbacks:
                 callback = handle._callback                                           # type: ignore
@@ -67,8 +68,8 @@ class AsyncioBackend:
         self.loop._stopping = False                                                   # type: ignore
         self.loop._thread_id = None                                                   # type: ignore
         asyncio.events._set_running_loop(None)
+        self.loop._set_coroutine_origin_tracking(False)                               # type: ignore
         try:
-            self.loop._set_coroutine_origin_tracking(False)                           # type: ignore
             asyncio.runners._cancel_all_tasks(self.loop)                              # type: ignore
             self.loop.run_until_complete(self.loop.shutdown_asyncgens())
         finally:
