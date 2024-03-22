@@ -3,14 +3,11 @@ from typing import TYPE_CHECKING
 
 from lamb.core.bases import BaseRoutine
 from lamb.core.managers import HooksManager
-from lamb.utils.threads import ThreadsHandler
 
 from .subroutines import (
-    ExceptionsSentinelSubroutine,
     MessagesUpdatingSubroutine,
     MessagesProcessingSubroutine,
     CommandsProcessingSubroutine,
-    MusicPlayerRoutine
 )
 from ..mediator import MediatorT
 from ..commands import CommandsT
@@ -28,11 +25,9 @@ class ChatRoutine(BaseRoutine[MediatorT, CommandsT]):
     threads_exceptions: list[BaseException]
 
     subroutines = [
-        ExceptionsSentinelSubroutine,
         MessagesUpdatingSubroutine,
         MessagesProcessingSubroutine,
-        CommandsProcessingSubroutine,
-        MusicPlayerRoutine]
+        CommandsProcessingSubroutine]
 
     def __init__(self, mediator: MediatorT, commands: CommandsT,
                  hooks_manager: HooksManager, routines_manager: RoutinesManager, *args, **kwargs):
@@ -40,12 +35,4 @@ class ChatRoutine(BaseRoutine[MediatorT, CommandsT]):
 
         self.messages_queue = []
         self.commands_queue = []
-        self.threads_exceptions = []
-
-        config = self.mediator.config
-        self.commands_workers = ThreadsHandler(workers_count=config.COMMANDS_THREADS, start=True)
-        self.hooks_workers = ThreadsHandler(workers_count=config.HOOKS_THREADS, start=True)
         self.register_subroutines(self)
-
-    def exception_callback(self, exc: BaseException):
-        self.threads_exceptions.append(exc)

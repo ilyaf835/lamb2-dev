@@ -80,9 +80,9 @@ class BaseRoutine(BaseEntity, Generic[BaseMediatorT, BaseCommandsT]):
             self.local_subroutines_manager.register(subroutine(
                 self.mediator, self.commands, self.hooks_manager, self.routines_manager, *args, **kwargs))
 
-    def run_local_subroutines(self, *args, **kwargs):
+    async def run_local_subroutines(self, *args, **kwargs):
         for container in self.local_subroutines_manager.yield_routines():
-            signal = container.run_method(*args, **kwargs)
+            signal = await container.run_method(*args, **kwargs)
             if signal:
                 if signal == Signal.SKIP:
                     break

@@ -73,7 +73,15 @@ class Bot:
         self.executor.start()
         try:
             while self.executor.running:
+                if self.mediator.threads_exceptions:
+                    raise self.mediator.threads_exceptions[0]
                 self.executor.run_once(timeout=0.5)
         finally:
             self.executor.shutdown()
             self.return_host()
+
+    def shutdown(self):
+        self.mediator.commands_workers.stop()
+        self.mediator.hooks_workers.stop()
+        self.mediator.player_worker.stop()
+        self.mediator.messages_worker.stop()

@@ -20,7 +20,3 @@ class BaseSubroutine(BaseRoutine[MediatorT, CommandsT]):
 
         self.messages_queue = routine.messages_queue
         self.commands_queue = routine.commands_queue
-        self.threads_exceptions = routine.threads_exceptions
-        self.commands_workers = routine.commands_workers
-        self.hooks_workers = routine.hooks_workers
-        self.exception_callback = routine.exception_callback
