@@ -16,7 +16,7 @@ class WhitelistHook(BaseHook[MediatorT, CommandsT]):
         user = message.user
         if (not self.mediator.whitelist_status
                 or user.name in self.mediator.profile.whitelist
-                or self.mediator.is_admin_user(user)
+                or self.mediator.check_permit('moder', user)
                 or not self.mediator.room.is_host(self.mediator.bot_user)):
             return
         with self.mediator.locks.chat:
