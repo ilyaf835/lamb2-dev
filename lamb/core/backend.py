@@ -5,8 +5,12 @@ import sys
 import asyncio
 import threading
 from bisect import bisect
+from selectors import BaseSelector
 
 if TYPE_CHECKING:
+    from _typeshed import FileDescriptorLike
+    from selectors import _EventMask
+
     from collections.abc import Callable, Coroutine, Iterable, Mapping
     from collections import deque
 
@@ -18,14 +22,72 @@ def noop():
     return
 
 
+class SelectorDemuxer(BaseSelector):
+
+    sentinel_selector: BaseSelector
+    target_selector: BaseSelector
+
+    def __init__(self, *, sentinel_selector: BaseSelector,
+                 target_selector: BaseSelector, correlation_key: Any):
+        if sentinel_selector is target_selector:
+            raise ValueError('Must be different selectors')
+        self.__dict__['sentinel_selector'] = sentinel_selector
+        self.__dict__['target_selector'] = target_selector
+        self.__dict__['correlation_key'] = correlation_key
+
+    def register(self, fileobj: FileDescriptorLike, events: _EventMask, data: Any = None):
+        self.sentinel_selector.register(fileobj, events, (self.correlation_key, data))
+        return self.target_selector.register(fileobj, events, data)
+
+    def unregister(self, fileobj: FileDescriptorLike):
+        self.sentinel_selector.unregister(fileobj)
+        return self.target_selector.unregister(fileobj)
+
+    def modify(self, fileobj: FileDescriptorLike, events: _EventMask, data: Any = None):
+        self.sentinel_selector.unregister(fileobj)
+        self.sentinel_selector.register(fileobj, events, (self.correlation_key, data))
+        self.target_selector.unregister(fileobj)
+        return self.target_selector.register(fileobj, events, data)
+
+    def select(self, timeout: Optional[float] = None):
+        return self.target_selector.select(timeout)
+
+    def get_map(self):
+        return self.target_selector.get_map()
+
+    def get_key(self, fileobj: FileDescriptorLike):
+        return self.target_selector.get_key(fileobj)
+
+    def close(self):
+        self.target_selector.close()
+
+    def __enter__(self):
+        return self.target_selector
+
+    def __exit__(self, *args):
+        self.target_selector.close()
+
+    def __getattr__(self, key: str):
+        return getattr(self.target_selector, key)
+
+    def __setattr__(self, key: str, value: Any):
+        setattr(self.target_selector, key, value)
+
+
 class AsyncioBackend:
 
     ready: deque[asyncio.Handle | asyncio.TimerHandle]
 
-    def __init__(self):
+    def __init__(self, sentinel_selector: Optional[BaseSelector] = None,
+                 correlation_key: Any = None):
         self.loop = asyncio.new_event_loop()
         self.loop._set_coroutine_origin_tracking(self.loop._debug)                    # type: ignore
         self.ready = self.loop._ready                                                 # type: ignore
+        if sentinel_selector:
+            self.loop._selector = SelectorDemuxer(                                    # type: ignore
+                sentinel_selector=sentinel_selector,
+                target_selector=self.loop._selector,                                  # type: ignore
+                correlation_key=correlation_key)
 
     def create_task(self, coro: Coroutine):
         return self.loop.create_task(coro)
@@ -130,16 +192,23 @@ class Executor:
     tasks: dict[asyncio.Task, TaskWrapper]
     wrappers: list[TaskWrapper]
 
-    def __init__(self, start=True):
+    def __init__(self, sentinel_selector: Optional[BaseSelector] = None,
+                 correlation_key: Any = None, start=True):
         self.tasks = {}
         self.wrappers = []
         self.running = False
+        self.sentinel_selector = sentinel_selector
+        if not correlation_key:
+            correlation_key = id(self)
+        self.correlation_key = correlation_key
         if start:
             self.start()
 
     def start(self):
         if not self.running:
-            self.backend = self.backend_cls()
+            self.backend = self.backend_cls(
+                sentinel_selector=self.sentinel_selector,
+                correlation_key=self.correlation_key)
             self.running = True
 
     def run_once(self, timeout: Optional[float] = 0):

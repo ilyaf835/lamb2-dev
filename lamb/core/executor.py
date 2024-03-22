@@ -9,6 +9,7 @@ from .backend import TaskWrapper, Executor
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Iterable, Mapping
+    from selectors import BaseSelector
 
     from .bases import BaseMediator, BaseCommands, BaseSignals
     from .managers import HooksManager, RoutineContainer, RoutinesManager
@@ -71,7 +72,8 @@ class RoutinesExecutor(Executor):
 
     def __init__(self, mediator: BaseMediator, commands: BaseCommands,
                  hooks_manager: HooksManager, routines_manager: RoutinesManager,
-                 signals: BaseSignals, start=False):
+                 signals: BaseSignals, sentinel_selector: Optional[BaseSelector] = None,
+                 correlation_key: Any = None, start=False):
         self.mediator = mediator
         self.commands = commands
         self.hooks_manager = hooks_manager
@@ -79,7 +81,8 @@ class RoutinesExecutor(Executor):
         self.signals = signals
         self.containers = {}
         self.exceptions = []
-        super().__init__(start=start)
+        super().__init__(sentinel_selector=sentinel_selector,
+                         correlation_key=correlation_key, start=start)
 
     def create_task(self, coro_func: Callable[..., Coroutine], *,
                     args: Iterable = (), kwargs: Optional[Mapping[str, Any]] = None,
