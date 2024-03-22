@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+import signal
 import datetime
 from pathlib import Path
 from pprint import pprint
@@ -15,12 +16,22 @@ if TYPE_CHECKING:
     from pathlib import PurePath
 
 
+class SigtermException(SystemExit):
+    pass
+
+
+def sigterm_callback(*args):
+    raise SigtermException(128 + signal.SIGTERM)
+
+
 def save_cookie(profile_path: PurePath, cookie: str):
     with open(profile_path / 'cookies.txt', 'a') as f:
         f.write(f'{datetime.datetime.now()} | {cookie}\n')
 
 
 def main(room_url: str, profile_name: str):
+    signal.signal(signal.SIGTERM, sigterm_callback)
+
     profiles_path = Path(__file__).parent / 'profiles'
     profile_loader = ProfileLoader(profiles_path)
     profile_dict = profile_loader.load(profile_name)
@@ -46,8 +57,8 @@ def main(room_url: str, profile_name: str):
 
 
 if __name__ == '__main__':
-    url = input('Room URL: ')
+    room_url = input('Room URL: ')
     profile_name = input('Profile name (leave empty to use default profile): ')
     if not profile_name:
         profile_name = 'default'
-    main(url, profile_name)
+    main(room_url, profile_name)
