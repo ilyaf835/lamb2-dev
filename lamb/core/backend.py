@@ -59,6 +59,8 @@ class SelectorDemuxer(BaseSelector):
         return self.target_selector.get_key(fileobj)
 
     def close(self):
+        for key in self.target_selector._fd_to_key.values():                          # type: ignore
+            self.sentinel_selector.unregister(key.fileobj)
         self.target_selector.close()
 
     def __enter__(self):
