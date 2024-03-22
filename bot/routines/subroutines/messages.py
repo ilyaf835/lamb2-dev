@@ -25,27 +25,27 @@ ProcessedCommandTuple = Tuple[CommandSpec, List[str], Dict[str, Union[str, bool]
 
 class SkipBotMessageSubroutine(BaseSubroutine):
 
-    def run(self, message: AnyMessage, *args, **kwargs):
+    async def run(self, message: AnyMessage, *args, **kwargs):
         if self.mediator.profile.is_bot(message.user.name, message.user.tripcode):
             return Signal.SKIP
 
 
 class MessageHooksTriggerSubroutine(BaseSubroutine):
 
-    def run(self, message: AnyMessage, *args, **kwargs):
+    async def run(self, message: AnyMessage, *args, **kwargs):
         if message.type == 'join':
-            self.hooks_workers.enqueue(
+            self.mediator.hooks_workers.enqueue(
                 self.hooks_manager.run_all, args=('on_join', message),
-                exception_callbacks=[self.exception_callback])
+                exception_callbacks=[self.mediator.exception_callback])
         elif message.type == 'message':
-            self.hooks_workers.enqueue(
+            self.mediator.hooks_workers.enqueue(
                 self.hooks_manager.run_all, args=('on_message', message),
-                exception_callbacks=[self.exception_callback])
+                exception_callbacks=[self.mediator.exception_callback])
 
 
 class MusicMessageSubroutine(BaseSubroutine):
 
-    def run(self, message: AnyMessage, *args, **kwargs):
+    async def run(self, message: AnyMessage, *args, **kwargs):
         if message.type == 'music':
             if not self.mediator.player.paused:
                 with self.mediator.locks.player:
@@ -88,7 +88,7 @@ class MessageParsingSubroutine(BaseSubroutine):
 
         return commands
 
-    def run(self, message: AnyMessage, *args, **kwargs):
+    async def run(self, message: AnyMessage, *args, **kwargs):
         if message.type == 'message':
             user = message.user
             if self.mediator.profile.is_banned(user.name):

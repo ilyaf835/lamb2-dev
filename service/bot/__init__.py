@@ -82,6 +82,10 @@ class Bot:
 
     def shutdown(self):
         self.executor.shutdown()
+        self.mediator.commands_workers.stop()
+        self.mediator.hooks_workers.stop()
+        self.mediator.player_worker.stop()
+        self.mediator.messages_worker.stop()
 
     def run_once(self):
         self.executor.run_once(timeout=0)

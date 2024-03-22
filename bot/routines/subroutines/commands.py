@@ -28,7 +28,7 @@ class CommandsSpamSubroutine(BaseSubroutine):
 
         self.timestamps = {}
 
-    def run(self, message: TextMessage, *args, **kwargs):
+    async def run(self, message: TextMessage, *args, **kwargs):
         user = message.user
         if not self.mediator.is_admin_user(user):
             now = time.monotonic()
@@ -72,11 +72,11 @@ class ExecuteCommandSubroutine(BaseSubroutine):
         if not spec.threaded:
             self.execute_command(command_func, message, spec, values, flags)
         else:
-            self.commands_workers.enqueue(
+            self.mediator.commands_workers.enqueue(
                 self.execute_command, args=(command_func, message, spec, values, flags),
-                exception_callbacks=[self.exception_callback])
+                exception_callbacks=[self.mediator.exception_callback])
 
-    def run(self, message: TextMessage, spec: CommandSpec,
+    async def run(self, message: TextMessage, spec: CommandSpec,
             values: list[str], flags: dict[str, str | bool], *args, **kwargs):
         self.handle_command(message, spec, values, flags)
         if spec.signal:

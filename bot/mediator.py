@@ -24,13 +24,14 @@ if TYPE_CHECKING:
 MediatorT = TypeVar('MediatorT', bound='Mediator')
 
 
-class MessageSender:
+class MessagesSender:
 
     def __init__(self, mediator: Mediator):
+        self.mediator = mediator
         self.config = mediator.config
         self.room = mediator.room
         self.translator = mediator.translator
-        self.send_worker = ThreadsHandler(workers_count=1, start=True)
+        self.messages_worker = mediator.messages_worker
         self.timestamp = 0
 
     def send(self, msg: str, user: Optional[User] = None, url: Optional[str] = None):
@@ -46,31 +47,87 @@ class MessageSender:
             format_kw = {}
         if translate:
             msg = self.translator.translate(msg)
-        self.send_worker.enqueue(self.send, args=(msg.format(*format_args, **format_kw), user, url))
+        self.messages_worker.enqueue(self.send, args=(msg.format(*format_args, **format_kw), user, url),
+                                     exception_callbacks=[self.mediator.exception_callback])
 
     def send_error(self, error: LambException, user: Optional[User] = None,
                    url: Optional[str] = None, translate: bool = True):
         self.send_message(error.msg, error.format_args, error.format_kw, user=user, url=url, translate=translate)
 
 
+class MusicPlayer:
+
+    def __init__(self, mediator: Mediator):
+        self.mediator = mediator
+        self.locks = mediator.locks
+        self.player = mediator.player
+        self.room = mediator.room
+        self.player_worker = mediator.player_worker
+
+    def start(self):
+        self.player_worker.enqueue(self.loop_player, exception_callbacks=[self.mediator.exception_callback])
+
+    def stop(self):
+        self.player_worker.stop()
+
+    def is_playing(self):
+        if self.player.current_track:
+            return time.monotonic() < self.player.timestamp + self.player.current_track.duration
+        return False
+
+    def pop_track(self):
+        if self.player.repeat:
+            return self.player.current_track or self.player.pop_track()
+        else:
+            return self.player.pop_track()
+
+    def loop_player(self):
+        while True:
+            time.sleep(0.2)
+            if not self.mediator.is_player_available():
+                continue
+            with self.locks.player:
+                if self.player.paused or self.is_playing():
+                    continue
+                if not self.player.queue:
+                    self.player.current_track = None
+                else:
+                    track = self.player.current_track = self.pop_track()
+                    self.room.launch_player(track.title, track.stream_url)
+                    self.player.set_timestamp()
+
+
 class Mediator(BaseMediator):
 
     def init(self, profile_dict: dict[str, Any], extractor_address: tuple[str, int], *args, **kwargs):
+        self.locks = LocksProxy()
+        self.threads_exceptions = []
+
         self.config = Config()
         self.profile = Profile()
         self.profile.init(profile_dict)
         self.translator = Translator(
-            self.profile.translations.pop('labels'),
+            self.profile.translations['labels'],
             self.profile.translations, self.profile.language)
+
+        self.commands_workers = ThreadsHandler(workers_count=self.config.COMMANDS_THREADS, start=True)
+        self.hooks_workers = ThreadsHandler(workers_count=self.config.HOOKS_THREADS, start=True)
+        self.player_worker = ThreadsHandler(workers_count=1, start=True)
+        self.messages_worker = ThreadsHandler(workers_count=1, start=True)
 
         self.extractor = Extractor(extractor_address)
         self.player = Player(self.config.DURATION_LIMIT, self.config.QUEUE_LIMIT)
         self.chat = Chat()
         self.room = self.chat.room
 
-        self.message_sender = MessageSender(self)
-        self.locks = LocksProxy()
         self.whitelist_status = False
+
+        self.messages_sender = MessagesSender(self)
+        self.music_player = MusicPlayer(self)
+        self.music_player.start()
+
+    def exception_callback(self, exc: BaseException):
+        self.threads_exceptions.append(exc)
 
     def is_player_available(self):
         with self.locks.chat:
@@ -124,8 +181,8 @@ class Mediator(BaseMediator):
 
     def send_message(self, msg: str, format_args: Iterable[Any] = (), format_kw: Optional[dict[str, Any]] = None,
                      user: Optional[User] = None, url: Optional[str] = None, translate: bool = True):
-        self.message_sender.send_message(msg, format_args, format_kw, user, url, translate)
+        self.messages_sender.send_message(msg, format_args, format_kw, user, url, translate)
 
     def send_error(self, error: LambException, user: Optional[User] = None,
                    url: Optional[str] = None, translate: bool = True):
-        self.message_sender.send_error(error, user, url, translate)
+        self.messages_sender.send_error(error, user, url, translate)

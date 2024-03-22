@@ -39,6 +39,7 @@ def main(room_url: str, profile_name: str):
         else:
             pprint(error.response.text)
     finally:
+        bot.shutdown()
         profile_loader.save(profile_name, profile_dict)
         bot.extractor.shutdown()
         extractor_process.join()
