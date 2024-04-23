@@ -1,3 +1,4 @@
 [tool.mypy]
 disable_error_code = "import-untyped"
 check_untyped_defs = false
+ignore_missing_imports = true
