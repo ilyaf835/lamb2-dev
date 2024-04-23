@@ -24,7 +24,7 @@ class ChatRoutine(BaseRoutine[MediatorT, CommandsT]):
     commands_queue: list[tuple[TextMessage, ProcessedCommandTuple]]
     threads_exceptions: list[BaseException]
 
-    subroutines = [
+    local_subroutines = [
         MessagesUpdatingSubroutine,
         MessagesProcessingSubroutine,
         CommandsProcessingSubroutine]
@@ -32,7 +32,11 @@ class ChatRoutine(BaseRoutine[MediatorT, CommandsT]):
     def __init__(self, mediator: MediatorT, commands: CommandsT,
                  hooks_manager: HooksManager, routines_manager: RoutinesManager, *args, **kwargs):
         super().__init__(mediator, commands, hooks_manager, routines_manager)
-
         self.messages_queue = []
         self.commands_queue = []
-        self.register_subroutines(self)
+        self.register_local_subroutines(self)
+
+    async def run(self, *args, **kwargs):
+        signal = await self.run_local_subroutines()
+        if signal:
+            return signal

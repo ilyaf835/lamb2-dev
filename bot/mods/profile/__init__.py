@@ -104,11 +104,13 @@ class Profile:
         ban = self.blacklist.get(name)
         if ban:
             return ban['status']
+        return None
 
     def ban_reason(self, name: str) -> Optional[str]:
         ban = self.blacklist.get(name)
         if ban:
             return ban['reason']
+        return None
 
     def add_to_whitelist(self, name: str):
         self.whitelist[name] = time.time()

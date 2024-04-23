@@ -1,17 +1,19 @@
+version: "3"
+
 services:
   postgres:
     image: postgres:16-alpine3.19
     user: postgres
+    ports:
+      - 5432:5432
     environment:
-      POSTGRES_DB: lamb
-      POSTGRES_USER: lamb
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - appnet
-    secrets:
-      - postgres_password
     deploy:
       mode: global
       restart_policy:
@@ -20,6 +22,8 @@ services:
 
   redis:
     image: redis/redis-stack-server:7.2.0-v8
+    ports:
+      - 6379:6379
     networks:
       - appnet
     deploy:
@@ -32,6 +36,7 @@ services:
     image: rabbitmq:3.12-management-alpine
     user: rabbitmq
     ports:
+      - 5672:5672
       - 15672:15672
     networks:
       - appnet
@@ -45,23 +50,18 @@ services:
     image: caddy:2.7-alpine
     ports:
       - 80:80
-    configs:
-      - source: caddy
-        target: /etc/caddy/Caddyfile
     volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
     networks:
+      - monitor
       - appnet
     deploy:
       mode: global
       restart_policy:
         condition: on-failure
         max_attempts: 1
-
-configs:
-  caddy:
-    external: true
 
 volumes:
   postgres_data:
@@ -70,8 +70,4 @@ volumes:
 
 networks:
   appnet:
-    external: true
-
-secrets:
-  postgres_password:
-    external: true
+  monitor:

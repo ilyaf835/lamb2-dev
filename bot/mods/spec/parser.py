@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from lamb.utils.tokenizer import create_parser
 
@@ -15,8 +15,8 @@ class CommandParser:
         self.parse_tokens = create_parser(command_prefix)
         self.commands_dict = commands_dict
 
-    def parse(self, s: str) -> list[tuple[CommandSpec, list[str], dict[FlagSpec, list[str]]]]:
-        output = []
+    def parse(self, s: str) -> list[tuple[CommandSpec, list[str], list[tuple[FlagSpec, list[str]]]]]:
+        output: list[Any] = []
         tokens = self.parse_tokens(s)
         if not tokens:
             return output
@@ -26,13 +26,12 @@ class CommandParser:
             if not command_spec:
                 raise NoSuchCommandError(format_args=(command,))
 
-            flags = {}
+            flags = []
             for flag, flag_values in raw_flags:
                 flag_spec = command_spec.flags.get(flag)
                 if not flag_spec:
                     raise NoSuchFlagError(format_args=(flag,))
-
-                flags[flag_spec] = flag_values
+                flags.append((flag_spec, flag_values))
 
             output.append((command_spec, command_values, flags))
 

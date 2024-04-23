@@ -1,0 +1,36 @@
+name: balancer
+
+replicas: 1
+
+labels:
+  app: balancer
+
+image:
+  name: balancer:latest
+  pullPolicy: IfNotPresent
+
+command: ["python"]
+args: ["balancer.py", "--workers", "1", "--instances", "2"]
+
+env:
+- name: POSTGRES_HOST
+  value: postgres
+- name: POSTGRES_USER
+  value: postgres
+- name: POSTGRES_DB
+  value: postgres
+- name: RABBITMQ_HOST
+  value: rabbitmq
+- name: REDIS_HOST
+  value: redis
+
+envFrom:
+- secretRef:
+    name: postgres
+
+resources:
+  limits:
+    memory: 256Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi

@@ -19,7 +19,7 @@ class YoutubeExtractor(BaseExtractor):
             'nocheckcertificate': True,
             'noplaylist': True,
             'simulate': True,
-            'quiet': False
+            'quiet': True
         })
 
     def validate_url(self, url: str):

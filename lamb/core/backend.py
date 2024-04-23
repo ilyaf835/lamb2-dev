@@ -5,75 +5,22 @@ import sys
 import asyncio
 import threading
 from bisect import bisect
-from selectors import BaseSelector
+
+from lamb.utils.selectors import SelectorDemuxer
 
 if TYPE_CHECKING:
-    from _typeshed import FileDescriptorLike
-    from selectors import _EventMask
+    from selectors import BaseSelector
 
     from collections.abc import Callable, Coroutine, Iterable, Mapping
     from collections import deque
 
 
 ExecutorT = TypeVar('ExecutorT', bound='Executor')
+TaskWrapperT = TypeVar('TaskWrapperT', bound='TaskWrapper')
 
 
 def noop():
     return
-
-
-class SelectorDemuxer(BaseSelector):
-
-    sentinel_selector: BaseSelector
-    target_selector: BaseSelector
-
-    def __init__(self, *, sentinel_selector: BaseSelector,
-                 target_selector: BaseSelector, correlation_key: Any):
-        if sentinel_selector is target_selector:
-            raise ValueError('Must be different selectors')
-        self.__dict__['sentinel_selector'] = sentinel_selector
-        self.__dict__['target_selector'] = target_selector
-        self.__dict__['correlation_key'] = correlation_key
-
-    def register(self, fileobj: FileDescriptorLike, events: _EventMask, data: Any = None):
-        self.sentinel_selector.register(fileobj, events, (self.correlation_key, data))
-        return self.target_selector.register(fileobj, events, data)
-
-    def unregister(self, fileobj: FileDescriptorLike):
-        self.sentinel_selector.unregister(fileobj)
-        return self.target_selector.unregister(fileobj)
-
-    def modify(self, fileobj: FileDescriptorLike, events: _EventMask, data: Any = None):
-        self.sentinel_selector.unregister(fileobj)
-        self.sentinel_selector.register(fileobj, events, (self.correlation_key, data))
-        self.target_selector.unregister(fileobj)
-        return self.target_selector.register(fileobj, events, data)
-
-    def select(self, timeout: Optional[float] = None):
-        return self.target_selector.select(timeout)
-
-    def get_map(self):
-        return self.target_selector.get_map()
-
-    def get_key(self, fileobj: FileDescriptorLike):
-        return self.target_selector.get_key(fileobj)
-
-    def close(self):
-        for key in self.target_selector._fd_to_key.values():                          # type: ignore
-            self.sentinel_selector.unregister(key.fileobj)
-        self.target_selector.close()
-
-    def __enter__(self):
-        return self.target_selector
-
-    def __exit__(self, *args):
-        self.close()
-
-    def __getattr__(self, key: str):
-        return getattr(self.target_selector, key)
-
-    def __setattr__(self, key: str, value: Any):
-        setattr(self.target_selector, key, value)
 
 
 class AsyncioBackend:
@@ -81,7 +28,7 @@ class AsyncioBackend:
     ready: deque[asyncio.Handle | asyncio.TimerHandle]
 
     def __init__(self, sentinel_selector: Optional[BaseSelector] = None,
-                 correlation_key: Any = None):
+                 correlation_key: Any = None, set_as_running: bool = False):
         self.loop = asyncio.new_event_loop()
         self.loop._set_coroutine_origin_tracking(self.loop._debug)                    # type: ignore
         self.ready = self.loop._ready                                                 # type: ignore
@@ -90,19 +37,24 @@ class AsyncioBackend:
                 sentinel_selector=sentinel_selector,
                 target_selector=self.loop._selector,                                  # type: ignore
                 correlation_key=correlation_key)
+        if set_as_running:
+            self.set_as_running()
 
     def create_task(self, coro: Coroutine):
         return self.loop.create_task(coro)
 
+    def set_as_running(self):
+        asyncio.events._set_running_loop(self.loop)
+        asyncio.set_event_loop(self.loop)
+        sys.set_asyncgen_hooks(
+            firstiter=self.loop._asyncgen_firstiter_hook,                             # type: ignore
+            finalizer=self.loop._asyncgen_finalizer_hook)                             # type: ignore
+        self.loop._thread_id = threading.get_ident()                                  # type: ignore
+
     def run_once(self, timeout: Optional[float] = 0):
         self.loop._check_closed()                                                     # type: ignore
         if self.loop is not asyncio.events._get_running_loop():
-            asyncio.events._set_running_loop(self.loop)
-            asyncio.set_event_loop(self.loop)
-            sys.set_asyncgen_hooks(
-                firstiter=self.loop._asyncgen_firstiter_hook,                         # type: ignore
-                finalizer=self.loop._asyncgen_finalizer_hook)                         # type: ignore
-            self.loop._thread_id = threading.get_ident()                              # type: ignore
+            self.set_as_running()
         if not self.loop._ready and timeout is not None:                              # type: ignore
             timeout = max(timeout, 0)
             if not self.loop._scheduled or (                                          # type: ignore
@@ -111,7 +63,7 @@ class AsyncioBackend:
         self.loop._run_once()                                                         # type: ignore
 
     def reset_loop(self, keep_callbacks=False):
-        tasks = set(asyncio.all_tasks())
+        tasks = asyncio.all_tasks()
         for task in tasks:
             task._log_destroy_pending = False                                         # type: ignore
             task.cancel()
@@ -141,10 +93,11 @@ class AsyncioBackend:
             self.loop.close()
 
 
-class TaskWrapper(Generic[ExecutorT]):
+class TaskWrapper:
 
-    def __init__(self, executor: ExecutorT, coro_func: Callable[..., Coroutine],
-                 args: Iterable, kwargs: Optional[Mapping[str, Any]], priority: int):
+    def __init__(self, executor: Executor, coro_func: Callable[..., Coroutine],
+                 args: Iterable = (), kwargs: Optional[Mapping[str, Any]] = None, *,
+                 priority: int):
         if kwargs is None:
             kwargs = {}
         self.executor = executor
@@ -186,16 +139,17 @@ class TaskWrapper(Generic[ExecutorT]):
             raise
 
 
-class Executor:
+class Executor(Generic[TaskWrapperT]):
 
     backend_cls: Type[AsyncioBackend] = AsyncioBackend
     task_wrapper_cls: Type[TaskWrapper] = TaskWrapper
 
-    tasks: dict[asyncio.Task, TaskWrapper]
-    wrappers: list[TaskWrapper]
+    tasks: dict[asyncio.Task, TaskWrapperT]
+    wrappers: list[TaskWrapperT]
 
     def __init__(self, sentinel_selector: Optional[BaseSelector] = None,
-                 correlation_key: Any = None, start=True):
+                 correlation_key: Any = None, set_as_running: bool = False,
+                 start: bool = True):
         self.tasks = {}
         self.wrappers = []
         self.running = False
@@ -204,13 +158,14 @@ class Executor:
             correlation_key = id(self)
         self.correlation_key = correlation_key
         if start:
-            self.start()
+            self.start(set_as_running=set_as_running)
 
-    def start(self):
+    def start(self, set_as_running: bool = False):
         if not self.running:
             self.backend = self.backend_cls(
                 sentinel_selector=self.sentinel_selector,
-                correlation_key=self.correlation_key)
+                correlation_key=self.correlation_key,
+                set_as_running=set_as_running)
             self.running = True
 
     def run_once(self, timeout: Optional[float] = 0):
@@ -228,10 +183,6 @@ class Executor:
     def cancel_tasks(self):
         for task_wrapper in self.wrappers:
             task_wrapper.cancel_task()
-
-    def create_task(self, coro_func: Callable[..., Coroutine], *, args: Iterable = (),
-                    kwargs: Optional[Mapping[str, Any]] = None, priority: int = 0):
-        return self.task_wrapper_cls(self, coro_func, args, kwargs, priority)
 
     def reschedule_tasks(self):
         finished_tasks = [
@@ -260,7 +211,7 @@ class Executor:
     def update_indices(self):
         count = len(self.tasks)
         for index, handle in enumerate(self.backend.ready):
-            callback = handle._callback                                 # type: ignore
+            callback = handle._callback                                               # type: ignore
             if not hasattr(callback, '__self__'):
                 continue
             task_wrapper = self.tasks.get(callback.__self__)

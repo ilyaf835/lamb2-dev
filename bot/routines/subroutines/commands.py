@@ -1,15 +1,15 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-import sys
 import time
-import traceback
 
 from lamb.core.executor import Signal
 from lamb.exceptions import ModException, CommandException
 from lamb.context.exceptions import ContextException
 
 from .base import BaseSubroutine
+
+from bot.logger import logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -63,7 +63,7 @@ class ExecuteCommandSubroutine(BaseSubroutine):
         except (CommandException, ContextException) as e:
             self.send_error(message, spec, e)
         except ModException as e:
-            traceback.print_exception(e.__class__, e, e.__traceback__, file=sys.stdout)
+            logger.info(f'{e.__class__.__name__}: {e}')
             self.send_error(message, spec, e)
 
     def handle_command(self, message: TextMessage, spec: CommandSpec,

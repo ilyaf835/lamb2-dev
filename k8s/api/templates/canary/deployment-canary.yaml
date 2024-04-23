@@ -1,0 +1,36 @@
+{{- if .Values.canary }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.canary.name }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.canary.name }}
+  template:
+    metadata:
+      labels:
+        {{- toYaml .Values.canary.labels | nindent 8 }}
+        {{- if .Values.dev }}
+          {{- toYaml .Values.dev.labels | nindent 8 }}
+        {{- end }}
+    spec:
+      containers:
+      - name: {{ .Values.canary.name }}
+        image: {{ .Values.canary.image.name }}
+        imagePullPolicy: {{ .Values.canary.image.pullPolicy }}
+        command: {{ default .Values.command .Values.canary.command }}
+        args: {{ default .Values.args .Values.canary.args | toYaml | nindent 10 }}
+        livenessProbe:
+          {{- default .Values.livenessProbe .Values.canary.livenessProbe | toYaml | nindent 10 }}
+        readinessProbe:
+          {{- default .Values.readinessProbe .Values.canary.readinessProbe | toYaml | nindent 10 }}
+        ports:
+          {{- default .Values.deployment.ports .Values.canary.deployment.ports  | toYaml | nindent 10 }}
+        env:
+          {{- default .Values.env .Values.canary.env | toYaml | nindent 10 }}
+        envFrom:
+          {{- default .Values.envFrom .Values.canary.envFrom | toYaml | nindent 10 }}
+        resources:
+          {{- default .Values.resources .Values.canary.resources | toYaml | nindent 10 }}
+{{- end }}

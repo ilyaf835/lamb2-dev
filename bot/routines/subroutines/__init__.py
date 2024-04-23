@@ -17,21 +17,22 @@ class MessagesUpdatingSubroutine(BaseSubroutine[MediatorT, CommandsT]):
 
     MAX_RETRIES = 2
 
-    def get_room_update(self):
+    async def get_room_update(self):
         retries = self.MAX_RETRIES
         while True:
             try:
-                return self.mediator.room.get_update()
+                return await self.mediator.room.async_get_update()
             except ChatApiError:
                 if not retries:
                     raise
                 retries -= 1
 
     async def run(self, *args, **kwargs):
-        room_json = self.get_room_update()
+        room_json = await self.get_room_update()
         with self.mediator.locks.chat:
             messages = self.mediator.room.update_room(room_json)
-        self.messages_queue.extend(messages)
+        if messages:
+            self.messages_queue.extend(messages)
 
 
 class MessagesProcessingSubroutine(BaseSubroutine[MediatorT, CommandsT]):

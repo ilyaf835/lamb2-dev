@@ -2,12 +2,16 @@ from __future__ import annotations
 from typing import Optional
 
 import os
+import sys
 import socket
 import struct
 import selectors
-import traceback
+import logging
 
 from lamb.utils.pools import BasePool
+
+
+logger = logging.getLogger(__name__)
 
 
 ACCEPT_CONN = 1
@@ -118,7 +122,7 @@ class SocketServer:
         try:
             if os.name == 'posix':
                 self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            if reuse_port:
+            if reuse_port and sys.platform != 'win32':
                 self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
             self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self.sock.bind(address)
@@ -203,9 +207,8 @@ class SocketServer:
             self.close_sock(conn.sock)
         except Exception as e:
             self.close_sock(conn.sock)
-            if not self.raise_exceptions:
-                traceback.print_exception(e.__class__, e, e.__traceback__)
-            else:
+            logger.exception(e)
+            if self.raise_exceptions:
                 raise
 
     def handle_shutdown(self):
@@ -222,6 +225,7 @@ class SocketServer:
                 self.handle_shutdown()
                 self.shutdown_requested = False
                 return True
+        return False
 
     def run(self, poll_interval: Optional[float] = None):
         self.running = True

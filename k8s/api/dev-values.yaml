@@ -1,0 +1,19 @@
+dev:
+  labels:
+    postgres: postgres
+    rabbitmq: rabbitmq
+    redis: redis
+
+env:
+- name: POSTGRES_HOST
+  value: postgres
+- name: POSTGRES_USER
+  value: postgres
+- name: POSTGRES_DB
+  value: postgres
+- name: RABBITMQ_HOST
+  value: rabbitmq
+- name: REDIS_HOST
+  value: redis
+- name: SECRET
+  value: secret

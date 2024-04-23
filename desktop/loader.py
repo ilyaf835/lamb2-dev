@@ -28,6 +28,8 @@ def load_ini(path: PathLike):
 
 class ProfileLoader:
 
+    scheme: dict[str, Any]
+
     def __init__(self, profiles_path: PathLike):
         self.profiles_path = Path(profiles_path)
         self.scheme = {

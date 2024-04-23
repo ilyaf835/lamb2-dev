@@ -1,0 +1,13 @@
+{{- if .Values.canary }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.canary.name }}
+  labels:
+    {{- toYaml .Values.canary.labels | nindent 4 }}
+spec:
+  selector:
+    app: {{ .Values.canary.name }}
+  ports:
+    {{- default .Values.service.ports .Values.canary.service.ports | toYaml | nindent 4 }}
+{{- end }}

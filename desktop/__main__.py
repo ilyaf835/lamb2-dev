@@ -6,11 +6,11 @@ import datetime
 from pathlib import Path
 from pprint import pprint
 
+from bot import Bot
 from bot.mods.chat.exceptions import ChatApiError
 
 from .extractor import connect_extractor_server
 from .loader import ProfileLoader
-from .bot import Bot
 
 if TYPE_CHECKING:
     from pathlib import PurePath

@@ -1,0 +1,62 @@
+canary:
+  name: api-canary
+
+  labels:
+    app: api-canary
+
+  image:
+    name: api-canary:latest
+    pullPolicy: IfNotPresent
+
+  livenessProbe:
+    tcpSocket:
+      port: api-canary
+    initialDelaySeconds: 30
+    timeoutSeconds: 5
+    periodSeconds: 10
+    failureThreshold: 5
+  readinessProbe:
+    tcpSocket:
+      port: api-canary
+    initialDelaySeconds: 5
+    timeoutSeconds: 5
+    periodSeconds: 10
+    failureThreshold: 5
+
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 75
+    targetMemoryUtilizationPercentage: 75
+
+  deployment:
+    ports:
+    - name: api-canary
+      containerPort: 8080
+      protocol: TCP
+
+  service:
+    ports:
+    - name: api-canary
+      protocol: TCP
+      port: 80
+      targetPort: api-canary
+
+  ingress:
+    annotations:
+      nginx.ingress.kubernetes.io/canary: "true"
+      nginx.ingress.kubernetes.io/canary-weight: "50"
+      nginx.ingress.kubernetes.io/affinity: "cookie"
+      nginx.ingress.kubernetes.io/session-cookie-path: "/"
+      nginx.ingress.kubernetes.io/session-cookie-samesite: "Strict"
+      nginx.ingress.kubernetes.io/session-cookie-change-on-failure: "true"
+      nginx.ingress.kubernetes.io/use-regex: "true"
+      nginx.ingress.kubernetes.io/rewrite-target: /$2
+    paths:
+    - path: /api/v1(/|$)(.*)
+      pathType: ImplementationSpecific
+      backend:
+        service:
+          name: api-canary
+          port:
+            name: api-canary

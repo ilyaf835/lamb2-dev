@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Generic, Protocol, Type, TypeVar, Optional
+from typing import Generic, Protocol, Type, TypeVar
 
 from .executor import Signal, RoutinesExecutor
 from .managers import HooksManager, RoutinesManager
@@ -34,9 +34,6 @@ class BaseRoutineWrapper(BaseWrapper):
 
     def __getattr__(self, name: str):
         return getattr(self.routine, name)
-
-    async def run(self, *args, **kwargs) -> Optional[Signal | str]:
-        raise NotImplementedError
 
 
 class BaseHook(BaseEntity, Generic[BaseMediatorT, BaseCommandsT]):
@@ -82,14 +79,14 @@ class BaseRoutine(BaseEntity, Generic[BaseMediatorT, BaseCommandsT]):
 
     async def run_local_subroutines(self, *args, **kwargs):
         for container in self.local_subroutines_manager.yield_routines():
-            signal = await container.run_method(*args, **kwargs)
+            coro_func = container.get_run_method()
+            if not coro_func:
+                continue
+            signal = await coro_func(*args, **kwargs)
             if signal:
                 if signal == Signal.SKIP:
                     break
                 return signal
-
-    async def run(self, *args, **kwargs) -> Optional[Signal | str]:
-        pass
 
 
 class BaseMediator:

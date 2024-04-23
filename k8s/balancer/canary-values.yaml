@@ -1,0 +1,11 @@
+canary:
+  name: balancer-canary
+
+  replicas: 1
+
+  labels:
+    app: balancer-canary
+
+  image:
+    name: balancer-canary:latest
+    pullPolicy: IfNotPresent

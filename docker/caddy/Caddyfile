@@ -1,0 +1,33 @@
+{
+    auto_https off
+    debug
+    servers {
+        metrics
+    }
+    admin :2019
+}
+
+:80 {
+    redir /api/v1/ /api/v1 301
+    @paths {
+        path /api/v1 /api/v1/*
+    }
+    handle @paths {
+        uri strip_prefix /api/v1
+        reverse_proxy http://api:8080 {
+            lb_policy cookie {
+                fallback weighted_round_robin 1
+            }
+
+            fail_duration 10s
+            unhealthy_status 500
+
+            health_uri /health
+            health_interval 10s
+            health_timeout 2s
+        }
+    }
+    handle {
+        respond 404
+    }
+}

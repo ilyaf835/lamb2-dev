@@ -22,21 +22,26 @@ class Service:
         await self.router.init(**self.config.RABBITMQ_SETTINGS)
 
     async def close(self):
-        await self.chat.api.client.aclose()
-        await self.redis.redis.aclose()  # type: ignore
-        await self.postgres.pool.close()
-        await self.router.channel.close()
-        await self.router.connection.close()
+        await self.chat.close()
+        await self.redis.close()
+        await self.postgres.close()
+        await self.router.close()
 
-    async def create_bot(self, session_id: str, user_name: str, bot_name: str, room_url: str, hidden: bool) -> str | None:
+    async def create_bot(self, session_id: str, user_name: str,
+                         bot_name: str, room_url: str, hidden: bool):
         if await self.redis.check_session_exists(session_id):
             return Errors.ALREADY_CREATED
 
-        command = validate_create_command(user_name, bot_name, room_url, hidden)
-        user_tripcode, room_name = await self.chat.get_user_info(user_name, bot_name, command.room_id, hidden)
+        command = validate_create_command(
+            user_name, bot_name, room_url, hidden)
+        user_tripcode, room_name = await self.chat.get_user_info(
+            user_name, bot_name, command.room_id, hidden)
 
-        user = await self.postgres.get_or_create_user(command.user_name, user_tripcode, command.user_passcode)
-        bot = await self.postgres.get_or_create_bot(command.bot_name, command.bot_passcode, user['id'])
+        user = await self.postgres.get_or_create_user(
+            command.user_name, user_tripcode, command.user_passcode)
+        bot = await self.postgres.get_or_create_bot(
+            command.bot_name, command.bot_passcode, user['id'])
+
         await self.redis.create_session_json(
             session_id, self.config.SESSION_TTL, {
                 'room': {'id': command.room_id, 'url': room_url, 'name': room_name},
@@ -47,7 +52,7 @@ class Service:
             await self.redis.delete_session_json(session_id)
             return error
 
-    async def delete_bot(self, session_id: str) -> str | None:
+    async def delete_bot(self, session_id: str):
         if not await self.redis.check_session_exists(session_id):
             return Errors.NO_BOT
 

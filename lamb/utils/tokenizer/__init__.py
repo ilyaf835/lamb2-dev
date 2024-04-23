@@ -53,7 +53,7 @@ def create_parser(command_prefix: str):
                     flags.append((token[FPL:], buffer))
                 elif FLAGSEQ.fullmatch(token):
                     for flag in token[FSPL:]:
-                        flags.append((flag, None))
+                        flags.append((flag, []))
                     expect = FLAGS
                 else:
                     buffer.append(token)
@@ -66,7 +66,7 @@ def create_parser(command_prefix: str):
                     expect = ANY
                 elif FLAGSEQ.fullmatch(token):
                     for flag in token[FSPL:]:
-                        flags.append((flag, None))
+                        flags.append((flag, []))
                 else:
                     raise UnexpectedTokenError(format_args=(token,))
             elif expect == CQUOTE:

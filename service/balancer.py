@@ -16,11 +16,11 @@ import asyncpg
 import aio_pika
 import redis.asyncio as redis
 
+from lamb.utils.locks import AsyncLocksProxy
 from lamb.utils.sockets import SocketServer, ConnectionHandler, BaseRequestHandler
 
 from .manager import start_bot_manager
 from .bot.extractor import connect_extractor_server
-from .utils.locks import AsyncLocksProxy
 
 if TYPE_CHECKING:
     from asyncio import AbstractEventLoop, Future
@@ -121,8 +121,6 @@ class BalancerSignals:
     async def deleted(self, conn: ConnectionHandler, session: dict[str, Any],
                       session_id: str, error: str):
         if not error:
-            await self.redis.getdel(f'balancers:{session_id}')
-            await self.redis.zincrby('balancers:queue', 1, self.balancer_queue.name)
             await self.balancer.write_session(**session['bot'])
             await self.redis.json().delete(f'session:{session_id}', path='$')
         await self.balancer.send_reply(self.messages.pop(session_id), b'')
@@ -132,7 +130,7 @@ class BalancerSignals:
         worker = self.sessions.pop(session_id, None)
         if worker:
             worker.running_instances -= 1
-        await self.redis.getdel(f'balancers:{session_id}')
+        await self.redis.delete(f'balancers:{session_id}')
         await self.redis.zincrby('balancers:queue', 1, self.balancer_queue.name)
         await self.balancer.write_session(**session['bot'])
         await self.redis.json().delete(f'session:{session_id}', path='$')
@@ -174,12 +172,12 @@ class LoadBalancer:
         await self.close()
 
     async def close(self):
-        await self.broker_channel.close()
-        await self.broker_connection.close()
         for worker in self.workers:
             worker.stop()
         self.server.stop()
         await self.finalize()
+        await self.broker_channel.close()
+        await self.broker_connection.close()
         await self.redis.close()
         await self.postgres_pool.close()
         for worker in self.workers:
@@ -191,7 +189,7 @@ class LoadBalancer:
             bot = await self.redis.json().get(f'session:{session_id}', '$.bot')
             await self.write_session(**bot[0])
         for session_id in self.sessions:
-            await self.redis.getdel(f'balancers:{session_id}')
+            await self.redis.delete(f'balancers:{session_id}')
             await self.redis.json().delete(f'session:{session_id}')
 
     async def setup_postgres(self, **kwargs):
@@ -231,8 +229,8 @@ class LoadBalancer:
     async def setup(self, session_ttl: int | datetime.timedelta, rabbitmq_settings: dict[str, Any],
                     redis_settings: dict[str, Any], postgres_settings: dict[str, Any]):
         self.SESSION_TTL = session_ttl
-        await self.setup_postgres(**postgres_settings)
         await self.setup_rabbitmq(**rabbitmq_settings)
+        await self.setup_postgres(**postgres_settings)
         await self.setup_redis(**redis_settings)
         await self.setup_commands()
         await self.setup_signals()
@@ -260,15 +258,19 @@ class LoadBalancer:
             while True:
                 stop = self.server.run_once(timeout=10)
                 if stop:
-                    self.server.close()
-                    future.set_result(None)
-                    return
+                    break
                 while self.signals_queue:
                     conn, (signal, *args) = self.signals_queue.popleft()
+                    if signal == b'crashed':
+                        break
                     asyncio.run_coroutine_threadsafe(getattr(self.signals, signal)(conn, *args), loop)
         except BaseException as e:
             future.set_exception(e)
             raise
+        finally:
+            self.server.close()
+            if not future.exception():
+                future.set_result(None)
 
     async def run(self):
         future = asyncio.Future()
@@ -325,20 +327,13 @@ def run():
     import os
 
     args = parse_args()
-
-    try:
-        password = os.environ['POSTGRES_PASSWORD']
-    except KeyError:
-        with open(os.environ['POSTGRES_PASSWORD_FILE']) as f:
-            password = f.read()
-
     settings = {
-        'session_ttl': datetime.timedelta(minutes=5),
+        'session_ttl': datetime.timedelta(minutes=1),
         'postgres_settings': {
             'host': os.environ['POSTGRES_HOST'],
             'user': os.environ['POSTGRES_USER'],
-            'database': os.environ['POSTGRES_DB'],
-            'password': password},
+            'password': os.environ['POSTGRES_PASSWORD'],
+            'database': os.environ['POSTGRES_DB']},
         'rabbitmq_settings': {
             'host': os.environ['RABBITMQ_HOST'],
             'prefetch_count': 100},

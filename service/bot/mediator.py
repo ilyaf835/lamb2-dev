@@ -19,21 +19,21 @@ MediatorT = TypeVar('MediatorT', bound='Mediator')
 
 class Mediator(DefaultMediator):
 
-    def init(self, session: dict[str, Any], extractor_address: tuple[str, int], *args, **kwargs):
+    def init(self, profile_dict: dict[str, Any], extractor_address: tuple[str, int], *args, **kwargs):
         self.locks = LocksProxy()
         self.threads_exceptions = []
 
         self.config = Config()
         self.profile = Profile()
-        self.profile.init(session)
+        self.profile.init(profile_dict)
         self.translator = Translator(
             self.profile.translations['labels'],
             self.profile.translations, self.profile.language)
 
         self.commands_workers = ThreadsHandler(workers_count=self.config.COMMANDS_THREADS, start=True)
         self.hooks_workers = ThreadsHandler(workers_count=self.config.HOOKS_THREADS, start=True)
-        self.player_worker = ThreadsHandler(workers_count=1, start=True)
-        self.messages_worker = ThreadsHandler(workers_count=1, start=True)
+        self.player_worker = ThreadsHandler(workers_count=self.config.PLAYER_THREADS, start=True)
+        self.messages_worker = ThreadsHandler(workers_count=self.config.MESSAGES_THREADS, start=True)
 
         self.extractor = Extractor(extractor_address)
         self.player = Player(self.config.DURATION_LIMIT, self.config.QUEUE_LIMIT)

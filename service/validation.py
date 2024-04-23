@@ -7,14 +7,14 @@ from .exceptions import ValidationError
 def validate_user_name(full_user_name: str):
     if not full_user_name:
         raise ValidationError('Empty user name')
-    name, *passcode = full_user_name.split('#', maxsplit=1)
+    name, *passcode_list = full_user_name.split('#', maxsplit=1)
     if not name:
         raise ValidationError('Empty user name')
     if len(name) > 20:
         raise ValidationError('User name must be less than 20 characters')
-    if not passcode:
+    if not passcode_list:
         raise ValidationError('User must have passcode')
-    passcode = passcode[0]
+    passcode = passcode_list[0]
     if not passcode.startswith('#'):
         raise ValidationError('Passcode must start with "#"')
     if len(passcode) < 6:
@@ -26,14 +26,14 @@ def validate_user_name(full_user_name: str):
 def validate_bot_name(full_bot_name: str):
     if not full_bot_name:
         raise ValidationError('Empty bot name')
-    name, *passcode = full_bot_name.split('#', maxsplit=1)
+    name, *passcode_list = full_bot_name.split('#', maxsplit=1)
     if not name:
         raise ValidationError('Empty bot name')
     if len(name) > 20:
         raise ValidationError('Bot name must be less than 20 characters')
-    if not passcode:
+    if not passcode_list:
         raise ValidationError('Bot must have passcode')
-    passcode = passcode[0]
+    passcode = passcode_list[0]
     if not passcode.startswith('#'):
         raise ValidationError('Passcode must start with "#"')
     if len(passcode) < 6:
@@ -53,18 +53,16 @@ def validate_room_url(room_url: str):
 
 
 def validate_create_command(user_name: str, bot_name: str, room_url: str, hidden: bool = False):
-    c = SimpleNamespace()
+    command = SimpleNamespace()
+    command.full_user_name = user_name
+    command.full_bot_name = bot_name
+    command.room_url = room_url
+    command.hidden = hidden
 
-    c.user_name, c.user_passcode = validate_user_name(user_name)
-    c.bot_name, c.bot_passcode = validate_bot_name(bot_name)
-    c.full_user_name = user_name
-    c.full_bot_name = bot_name
-
-    if c.user_name == c.bot_name:
+    command.room_id = validate_room_url(room_url)
+    command.user_name, command.user_passcode = validate_user_name(user_name)
+    command.bot_name, command.bot_passcode = validate_bot_name(bot_name)
+    if command.user_name == command.bot_name:
         raise ValidationError('User and bot nicknames must be different')
 
-    c.room_id = validate_room_url(room_url)
-    c.room_url = room_url
-    c.hidden = hidden
-
-    return c
+    return command

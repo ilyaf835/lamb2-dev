@@ -63,6 +63,7 @@ def validate_index(index: str, min_index: int = 1, max_index: float = float('inf
 class Commands(BaseCommands[MediatorT]):
 
     ctx = CommandsContext
+    search_list: list[Track]
 
     def __init__(self, mediator: MediatorT, *args, **kwargs):
         super().__init__(mediator, *args, **kwargs)
@@ -79,14 +80,15 @@ class Commands(BaseCommands[MediatorT]):
 
     def help(self, message: TextMessage, spec: CommandSpec,
              name: Optional[str] = None, public: bool = False):
-        user = message.user
-        is_moder = self.mediator.check_permit('moder', user)
         with self.locks.chat:
-            if is_moder:
+            if (name or public) and self.mediator.check_permit('moder', message.user):
+                user = None
                 if name:
                     user = self.room.get_user_or_raise(name)
                 elif public:
                     user = None
+            else:
+                user = message.user
         self.mediator.send_message(self.mediator.config.HELP_MESSAGE, user=user)
 
     def leave(self, message: TextMessage, spec: CommandSpec):

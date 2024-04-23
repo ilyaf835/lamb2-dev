@@ -1,6 +1,7 @@
 import asyncpg
 
-from ..utils.crypto import hash_passcode
+from lamb.utils.cryptography import hash_passcode
+
 from ..models import User, Bot
 
 
@@ -10,10 +11,13 @@ class PostgresProvider:
         self.pool = asyncpg.create_pool(**kwargs)
         await self.pool._async__init__()
 
+    async def close(self):
+        await self.pool.close()
+
     async def get_or_create_user(self, name: str, tripcode: str, passcode: str):
         async with self.pool.acquire() as conn:
             user = await conn.fetchrow("""
-                SELECT id, name, tripcode, passcode FROM users
+                SELECT id, name, tripcode FROM users
                 WHERE name = $1 AND tripcode = $2
                 """, name, tripcode)
             if not user:
@@ -21,10 +25,10 @@ class PostgresProvider:
                 user = await conn.fetchrow("""
                     INSERT INTO users (name, tripcode, passcode, salt)
                     VALUES ($1, $2, $3, $4)
-                    RETURNING id, name, tripcode, passcode
+                    RETURNING id, name, tripcode
                     """, name, tripcode, hashed_passcode, salt)
 
-        return User(user)
+        return User(user)  # type: ignore
 
     async def get_or_create_bot(self, name: str, passcode: str, user_id: str):
         async with self.pool.acquire() as conn:
@@ -42,4 +46,4 @@ class PostgresProvider:
                 WHERE user_id = $3
                 """, name, passcode, user_id)
 
-        return Bot(bot)
+        return Bot(bot)  # type: ignore

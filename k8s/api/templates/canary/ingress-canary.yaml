@@ -1,0 +1,13 @@
+{{- if .Values.canary }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.canary.name }}
+  annotations:
+    {{- toYaml .Values.canary.ingress.annotations | nindent 4 }}
+spec:
+  rules:
+  - http:
+      paths:
+        {{- toYaml .Values.canary.ingress.paths | nindent 8 }}
+{{- end }}

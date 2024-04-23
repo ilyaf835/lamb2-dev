@@ -76,7 +76,7 @@ class AsyncChatAPI:
         return await self.client.get(f'{url}&api=json')
 
     @async_catch_error
-    async def update_room(self, update_time: float, fast: bool =False):
+    async def update_room(self, update_time: float, fast: bool = False):
         return await self.client.get(f'https://drrr.com/json.php?{"fast=1&" if fast else ""}update={update_time}')
 
     @async_catch_error

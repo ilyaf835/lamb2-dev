@@ -2,7 +2,6 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Optional, Any, Type
 
-import inspect
 import asyncio
 
 from .backend import TaskWrapper, Executor
@@ -13,13 +12,6 @@ if TYPE_CHECKING:
 
     from .bases import BaseMediator, BaseCommands, BaseSignals
     from .managers import HooksManager, RoutineContainer, RoutinesManager
-
-
-def async_wrapper(func: Callable):
-    async def coro(*args, **kwargs) -> Optional[Signal | str]:
-        return func(*args, **kwargs)
-
-    return coro
 
 
 class Signal:
@@ -36,30 +28,30 @@ class Signal:
         self.kwargs = kwargs
 
 
-class RoutineTaskWrapper(TaskWrapper['RoutinesExecutor']):
+class RoutineTaskWrapper(TaskWrapper):
 
-    def __init__(self, executor: RoutinesExecutor, coro: Callable[..., Coroutine],
-                 args: Iterable, kwargs: Optional[Mapping[str, Any]], priority: int,
-                 level: int, routine_container: RoutineContainer):
-        super().__init__(executor, coro, args, kwargs, priority)
-        self.routine_container = routine_container
+    executor: RoutinesExecutor
+
+    def __init__(self, executor: RoutinesExecutor, coro_func: Callable[..., Coroutine],
+                 args: Iterable = (), kwargs: Optional[Mapping[str, Any]] = None, *,
+                 priority: int, level: int, routine_container: RoutineContainer):
+        super().__init__(executor, coro_func, args, kwargs, priority=priority)
         self.level = level
-
-    def update_coro(self):
-        self.coro = self.routine_container.run_method
-        if not inspect.iscoroutinefunction(self.coro):
-            self.coro = async_wrapper(self.coro)
+        self.routine_container = routine_container
 
     async def run(self):
+        self.coro_func = self.routine_container.get_run_method()
+        if not self.coro_func:
+            return
         try:
-            self.update_coro()
-            signal = await self.coro(*self.args, **self.kwargs)
+            signal = await self.coro_func(*self.args, **self.kwargs)
             if signal:
                 self.executor.process_signal(self.routine_container, signal)
         except BaseException as exc:
             self.exception = exc
             self.executor.append_exception(exc)
             self.backend.reset_loop()
+            raise
 
 
 class RoutinesExecutor(Executor):
@@ -69,11 +61,12 @@ class RoutinesExecutor(Executor):
     tasks: dict[asyncio.Task, RoutineTaskWrapper]
     wrappers: list[RoutineTaskWrapper]
     containers: dict[RoutineContainer, RoutineTaskWrapper]
+    exceptions: list[BaseException]
 
     def __init__(self, mediator: BaseMediator, commands: BaseCommands,
                  hooks_manager: HooksManager, routines_manager: RoutinesManager,
                  signals: BaseSignals, sentinel_selector: Optional[BaseSelector] = None,
-                 correlation_key: Any = None, start=False):
+                 correlation_key: Any = None, set_as_running: bool = False, start: bool = False):
         self.mediator = mediator
         self.commands = commands
         self.hooks_manager = hooks_manager
@@ -81,13 +74,8 @@ class RoutinesExecutor(Executor):
         self.signals = signals
         self.containers = {}
         self.exceptions = []
-        super().__init__(sentinel_selector=sentinel_selector,
-                         correlation_key=correlation_key, start=start)
-
-    def create_task(self, coro_func: Callable[..., Coroutine], *,
-                    args: Iterable = (), kwargs: Optional[Mapping[str, Any]] = None,
-                    priority: int, level: int, routine_container: RoutineContainer):
-        return self.task_wrapper_cls(self, coro_func, args, kwargs, priority, level, routine_container)
+        super().__init__(sentinel_selector=sentinel_selector, correlation_key=correlation_key,
+                         set_as_running=set_as_running, start=start)
 
     def bootstrap(self, routines_manager: Optional[RoutinesManager] = None,
                   priority: int = 0, level: int = 0):
@@ -97,20 +85,23 @@ class RoutinesExecutor(Executor):
             routine = container.routine
             if routine.subroutines:
                 priority = self.bootstrap(routine.subroutines_manager, priority=priority, level=level+1)
-            task_wrapper = self.create_task(
-                container.run_method, priority=priority, level=level, routine_container=container)
-            self.containers[container] = task_wrapper
-            task_wrapper.schedule_task()
+            coro_func = container.get_run_method()
+            if coro_func:
+                task_wrapper = self.task_wrapper_cls(
+                    self, coro_func, priority=priority, level=level, routine_container=container)
+                self.containers[container] = task_wrapper
+                task_wrapper.schedule_task()
+            priority += 1
 
         return priority
 
-    def start(self):
+    def start(self, set_as_running: bool = False):
         if not self.running:
-            super().start()
+            super().start(set_as_running=set_as_running)
             self.bootstrap()
 
     def run_once(self, timeout: Optional[float] = 0):
-        super().run_once(timeout)
+        super().run_once(timeout=timeout)
         if self.exceptions:
             raise self.exceptions[0]
 

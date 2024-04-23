@@ -12,6 +12,8 @@ class Config(dict):
 
         self.COMMANDS_THREADS = 2
         self.HOOKS_THREADS = 1
+        self.PLAYER_THREADS = 1
+        self.MESSAGES_THREADS = 1
         self.SEND_DELAY = 1
 
         self.DURATION_LIMIT = 12 * 60

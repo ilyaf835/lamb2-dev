@@ -30,7 +30,7 @@ class Player:
         self.duration_limit = duration_limit
         self.queue_limit = queue_limit
         self.queue = []
-        self.timestamp = 0
+        self.timestamp = 0.0
         self.current_track = None
         self.repeat = False
         self.paused = False

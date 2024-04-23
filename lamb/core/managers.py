@@ -1,8 +1,8 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Generic, Type, TypeVar, Optional
+from typing import TYPE_CHECKING, Any, Generic, Type, TypeVar, Optional
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Coroutine
 
     from .bases import (
         BaseEntity,
@@ -12,13 +12,17 @@ if TYPE_CHECKING:
         BaseRoutine,  # noqa: F401
         BaseRoutineWrapper
     )
+    from .executor import Signal
 
 
 EntityT = TypeVar('EntityT', bound='BaseEntity')
 WrapperT = TypeVar('WrapperT', bound='BaseWrapper')
+EntityContainerT = TypeVar('EntityContainerT', bound='BaseEntityContainer')
 
 
 class BaseEntityContainer(Generic[EntityT, WrapperT]):
+
+    wrapped_entity: Optional[WrapperT]
 
     def __init__(self, entity: EntityT, wrapper_cls: Optional[Type[WrapperT]] = None):
         self.entity = entity
@@ -37,11 +41,11 @@ class BaseEntityContainer(Generic[EntityT, WrapperT]):
         self.wrapped_entity = None
 
 
-class BaseEntitiesManager(Generic[EntityT, WrapperT]):
+class BaseEntitiesManager(Generic[EntityT, WrapperT, EntityContainerT]):
 
-    container_cls: Type[BaseEntityContainer]
-    entities: dict[str, BaseEntityContainer]
-    wrappers: dict[str, Type[BaseWrapper]]
+    container_cls: Type[EntityContainerT]
+    entities: dict[str, EntityContainerT]
+    wrappers: dict[str, Type[WrapperT]]
 
     def __init__(self, wrappers: Optional[dict[str, Type[WrapperT]]] = None):
         self.entities = {}
@@ -82,7 +86,7 @@ class HookContainer(BaseEntityContainer['BaseHook', 'BaseHookWrapper']):
             return getattr(self.entity, meth_name, None)
 
 
-class HooksManager(BaseEntitiesManager['BaseHook', 'BaseHookWrapper']):
+class HooksManager(BaseEntitiesManager['BaseHook', 'BaseHookWrapper', 'HookContainer']):
 
     container_cls: Type[HookContainer] = HookContainer
     entities: dict[str, HookContainer]
@@ -118,15 +122,14 @@ class RoutineContainer(BaseEntityContainer['BaseRoutine', 'BaseRoutineWrapper'])
     def wrapper(self):
         return self.wrapped_entity
 
-    @property
-    def run_method(self):
+    def get_run_method(self) -> Optional[Callable[..., Coroutine[Any, Any, Signal | str | None]]]:
         if self.wrapped_entity:
-            return self.wrapped_entity.run
+            return getattr(self.wrapped_entity, 'run', None)
         else:
-            return self.entity.run
+            return getattr(self.entity, 'run', None)
 
 
-class RoutinesManager(BaseEntitiesManager['BaseRoutine', 'BaseRoutineWrapper']):
+class RoutinesManager(BaseEntitiesManager['BaseRoutine', 'BaseRoutineWrapper', 'RoutineContainer']):
 
     container_cls: Type[RoutineContainer] = RoutineContainer
     entities: dict[str, RoutineContainer]

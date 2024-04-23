@@ -32,7 +32,7 @@ class MessagesSender:
         self.room = mediator.room
         self.translator = mediator.translator
         self.messages_worker = mediator.messages_worker
-        self.timestamp = 0
+        self.timestamp = 0.0
 
     def send(self, msg: str, user: Optional[User] = None, url: Optional[str] = None):
         remaining = self.config.SEND_DELAY - (time.monotonic() - self.timestamp)
@@ -99,6 +99,8 @@ class MusicPlayer:
 
 class Mediator(BaseMediator):
 
+    threads_exceptions: list[BaseException]
+
     def init(self, profile_dict: dict[str, Any], extractor_address: tuple[str, int], *args, **kwargs):
         self.locks = LocksProxy()
         self.threads_exceptions = []
@@ -112,8 +114,8 @@ class Mediator(BaseMediator):
 
         self.commands_workers = ThreadsHandler(workers_count=self.config.COMMANDS_THREADS, start=True)
         self.hooks_workers = ThreadsHandler(workers_count=self.config.HOOKS_THREADS, start=True)
-        self.player_worker = ThreadsHandler(workers_count=1, start=True)
-        self.messages_worker = ThreadsHandler(workers_count=1, start=True)
+        self.player_worker = ThreadsHandler(workers_count=self.config.PLAYER_THREADS, start=True)
+        self.messages_worker = ThreadsHandler(workers_count=self.config.MESSAGES_THREADS, start=True)
 
         self.extractor = Extractor(extractor_address)
         self.player = Player(self.config.DURATION_LIMIT, self.config.QUEUE_LIMIT)

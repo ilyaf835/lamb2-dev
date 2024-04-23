@@ -1,4 +1,8 @@
-COMMANDS = {
+from __future__ import annotations
+from typing import Any
+
+
+COMMANDS: dict[str, dict[str, Any]] = {
     'help': {
         'permit': 'user',
         'require_value': None,

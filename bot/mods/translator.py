@@ -1,8 +1,11 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Any
 
 
 class Translator:
+
+    labels: dict[str, str]
+    table: dict[str, Any]
 
     def __init__(self, labels: Optional[dict[str, str]] = None,
                  table: Optional[dict[str, str]] = None, language: Optional[str] = None):

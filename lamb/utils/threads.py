@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 import atexit
 import threading
-import traceback
 from heapq import heappush, heappop
 
 if TYPE_CHECKING:
@@ -346,7 +345,6 @@ class Task:
                 self.exception = e
                 for callback in self.exception_callbacks:
                     callback(self.exception)
-                raise
             else:
                 for callback in self.success_callbacks:
                     callback(self.result)
@@ -464,8 +462,6 @@ class Producer:
         thread.join_on_exit = task.join_on_exit
         try:
             task.execute()
-        except Exception as e:
-            traceback.print_exception(e.__class__, e, e.__traceback__)
         finally:
             thread.join_on_exit = False
 
@@ -528,8 +524,6 @@ class Worker:
         thread.join_on_exit = task.join_on_exit
         try:
             task.execute()
-        except Exception as e:
-            traceback.print_exception(e.__class__, e, e.__traceback__)
         finally:
             thread.join_on_exit = False
 

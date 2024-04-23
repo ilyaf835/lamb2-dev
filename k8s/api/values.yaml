@@ -1,0 +1,86 @@
+name: api
+
+labels:
+  app: api
+
+image:
+  name: api:latest
+  pullPolicy: IfNotPresent
+
+command: ["uvicorn"]
+args: ["api_server:app", "--root-path", "/api/v1", "--proxy-headers",
+       "--forwarded-allow-ips", "'*'", "--host", "0.0.0.0", "--port", "8080"]
+
+env:
+- name: POSTGRES_HOST
+  value: postgres
+- name: POSTGRES_USER
+  value: postgres
+- name: POSTGRES_DB
+  value: postgres
+- name: RABBITMQ_HOST
+  value: rabbitmq
+- name: REDIS_HOST
+  value: redis
+
+envFrom:
+- secretRef:
+    name: postgres
+
+livenessProbe:
+  tcpSocket:
+    port: api
+  initialDelaySeconds: 30
+  timeoutSeconds: 5
+  periodSeconds: 10
+  failureThreshold: 5
+readinessProbe:
+  tcpSocket:
+    port: api
+  initialDelaySeconds: 5
+  timeoutSeconds: 5
+  periodSeconds: 10
+  failureThreshold: 5
+
+resources:
+  limits:
+    memory: 256Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: 75
+
+deployment:
+  ports:
+  - name: api
+    containerPort: 8080
+    protocol: TCP
+
+service:
+  ports:
+  - name: api
+    protocol: TCP
+    port: 80
+    targetPort: api
+
+ingress:
+  annotations:
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-path: "/"
+    nginx.ingress.kubernetes.io/session-cookie-samesite: "Strict"
+    nginx.ingress.kubernetes.io/session-cookie-change-on-failure: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+  paths:
+  - path: /api/v1(/|$)(.*)
+    pathType: ImplementationSpecific
+    backend:
+      service:
+        name: api
+        port:
+          name: api

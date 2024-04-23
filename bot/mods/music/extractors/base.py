@@ -1,5 +1,5 @@
-from typing import Protocol
+from typing import Protocol, Any
 
 
 class BaseExtractor(Protocol):
-    def extract(self, url: str): ...
+    def extract(self, url: str) -> Any: ...

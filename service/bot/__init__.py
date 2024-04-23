@@ -1,51 +1,44 @@
 from __future__ import annotations
-from typing import Any, Type
+from typing import TYPE_CHECKING, Any, Type, Optional
 
-from lamb.core.bases import BaseSetup
-from lamb.core.executor import RoutinesExecutor
-
-from bot.commands import Commands
-from bot.hooks import WhitelistHook, BlacklistHook, PrivateMessageHook, NoticeHook
-
+from bot import DefaultSetup
 from bot.mods.chat.exceptions import ChatException
 
 from .mediator import Mediator
-from .routines import ChatRoutine
+
+if TYPE_CHECKING:
+    from selectors import BaseSelector
 
 
-class DefaultSetup(BaseSetup):
+class BotSetup(DefaultSetup):
 
     mediator_cls: Type[Mediator] = Mediator
-    commands_cls: Type[Commands] = Commands
-    executor_cls: Type[RoutinesExecutor] = RoutinesExecutor
 
-    hooks = [
-        WhitelistHook,
-        BlacklistHook,
-        PrivateMessageHook,
-        NoticeHook]
-    routines = [ChatRoutine]
+    def __init__(self, profile_dict: dict[str, Any], extractor_address: tuple[str, int],
+                 sentinel_selector: BaseSelector, correlation_key: Any):
+        super().__init__(profile_dict, extractor_address)
+        self.sentinel_selector = sentinel_selector
+        self.correlation_key = correlation_key
 
-    def __init__(self, session: dict[str, Any], extractor_address: tuple[str, int]):
-        self.session = session
-        self.extractor_address = extractor_address
-
-    def bootstrap_mediator(self):
-        self.mediator = self.mediator_cls()
-        self.mediator.init(self.session, self.extractor_address)
+    def bootstrap_executor(self, *args, **kwargs):
+        self.executor = self.executor_cls(
+            self.mediator, self.commands, self.hooks_manager, self.routines_manager,
+            self.signals, self.sentinel_selector, self.correlation_key)
 
 
 class Bot:
 
-    setup_cls: Type[DefaultSetup] = DefaultSetup
+    setup_cls: type[BotSetup] = BotSetup
 
-    def __init__(self, session: dict[str, Any], extractor_address: tuple[str, int], *args, **kwargs):
-        self.setup = self.setup_cls(session, extractor_address)
+    def __init__(self, profile_dict: dict[str, Any], extractor_address: tuple[str, int],
+                 sentinel_selector: BaseSelector, correlation_key: Any):
+        self.setup = self.setup_cls(profile_dict, extractor_address, sentinel_selector, correlation_key)
         self.setup.bootstrap()
 
         self.executor = self.setup.executor
         self.mediator = self.setup.mediator
         self.profile = self.mediator.profile
+        self.config = self.mediator.config
         self.chat = self.mediator.chat
         self.room = self.mediator.room
         self.extractor = self.mediator.extractor
@@ -53,7 +46,7 @@ class Bot:
     def login(self):
         bot = self.profile.bot
         self.chat.login(bot['name'], passcode=bot['passcode'], icon=bot['icon'])
-        bot['tripcode'] = self.chat.get_lounge_json()['profile'].get('tripcode')
+        bot['tripcode'] = self.chat.get_lounge_json()['profile'].get('tripcode', '')
 
     def logout(self):
         self.chat.logout()
@@ -77,8 +70,9 @@ class Bot:
     def running(self):
         return self.executor.running
 
-    def start(self):
+    def run_once(self, timeout: Optional[float] = 0):
         self.executor.start()
+        self.executor.run_once(timeout=timeout)
 
     def shutdown(self):
         self.executor.shutdown()
@@ -86,6 +80,3 @@ class Bot:
         self.mediator.hooks_workers.stop()
         self.mediator.player_worker.stop()
         self.mediator.messages_worker.stop()
-
-    def run_once(self):
-        self.executor.run_once(timeout=0)

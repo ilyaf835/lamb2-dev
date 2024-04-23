@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Dict, List, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple, Union
 
 from lamb.core.executor import Signal
 from lamb.utils.tokenizer.exceptions import ParsingException
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from bot.mods.chat.messages import AnyMessage
 
 
-ParsedCommandTuple = Tuple[CommandSpec, List[str], Dict[FlagSpec, List[str]]]
+ParsedCommandTuple = Tuple[CommandSpec, List[str], List[Tuple[FlagSpec, List[str]]]]
 ProcessedCommandTuple = Tuple[CommandSpec, List[str], Dict[str, Union[str, bool]]]
 
 
@@ -75,10 +75,10 @@ class MessageParsingSubroutine(BaseSubroutine):
 
     def process_commands(self, parsed_commands: list[ParsedCommandTuple], permit: int) -> list[ProcessedCommandTuple]:
         commands = []
-        for command_spec, command_values, flags_dict in parsed_commands:
+        for command_spec, command_values, flags_list in parsed_commands:
             self.check_spec(command_spec, command_values, permit)
-            flags = {}
-            for flag_spec, flag_values in flags_dict.items():
+            flags: dict[str, Any] = {}
+            for flag_spec, flag_values in flags_list:
                 self.check_spec(flag_spec, flag_values, permit)
                 if flag_values:
                     flags[flag_spec.name] = ' '.join(flag_values)

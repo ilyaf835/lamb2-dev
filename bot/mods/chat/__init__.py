@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Type, Optional
 import re
 
 from .api import AsyncChatAPI, ChatAPI, check_response_json
-from .messages import AnyMessage, BaseMessage, TextMessage, JoinMessage, MusicMessage
+from .messages import AnyMessage, TextMessage, JoinMessage, MusicMessage
 from .exceptions import (
     ChatNotConnectedError,
     ChatAlreadyConnectedError,
@@ -47,8 +47,10 @@ class User:
 
 class Room:
 
-    message_types: dict[str, Type[BaseMessage]]
+    message_types: dict[str, Type[AnyMessage]]
     users: dict[str, User]
+    url: Optional[str]
+    host: Optional[User]
 
     def __init__(self, sync_api: ChatAPI, async_api: AsyncChatAPI):
         self.sync_api = sync_api
@@ -167,13 +169,13 @@ class Room:
         return messages
 
     @connection_required
-    def get_update(self):
-        response = self.sync_api.update_room(self.update_time)
+    def get_update(self, fast: bool = False):
+        response = self.sync_api.update_room(update_time=self.update_time, fast=fast)
         return check_response_json(response)
 
     @connection_required
-    async def async_get_update(self):
-        response = await self.async_api.update_room(self.update_time)
+    async def async_get_update(self, fast: bool = False):
+        response = await self.async_api.update_room(update_time=self.update_time, fast=fast)
         return check_response_json(response)
 
     @connection_required

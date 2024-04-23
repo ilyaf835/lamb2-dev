@@ -53,8 +53,9 @@ class RPC:
 
     def create_future(self, callback: Callable[[Future[str], AbstractIncomingMessage], Any]) -> tuple[Future[str], str]:
         correlation_id = str(uuid.uuid4())
-        future = asyncio.Future()
+        future: asyncio.Future[str] = asyncio.Future()
         self.futures[correlation_id] = (future, callback)
+        future.add_done_callback(lambda future: self.futures.pop(correlation_id, None))
 
         return future, correlation_id
 
@@ -120,6 +121,10 @@ class Router:
         await self.rpc.init()
 
         self.commands = RouterCommands(self)
+
+    async def close(self):
+        await self.channel.close()
+        await self.connection.close()
 
     async def command_callback(self, future: Future[str], message: AbstractIncomingMessage):
         future.set_result(message.body.decode())

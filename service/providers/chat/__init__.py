@@ -48,6 +48,9 @@ class ChatProvider:
     def __init__(self, timeout: Optional[float] = 30):
         self.api = AsyncChatAPI(timeout=timeout)
 
+    async def close(self):
+        await self.api.client.aclose()
+
     async def get_lounge_json(self, full_user_name: str):
         try:
             check_response_json(await self.api.login(full_user_name))

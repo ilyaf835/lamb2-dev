@@ -8,8 +8,6 @@ from lamb.utils.threads import ThreadsHandler
 from lamb.utils.sockets import SocketServer, BaseRequestHandler
 from lamb.utils.pools import BasePool
 
-from bot.mods.music.extractors.exceptions import ExtractorException
-
 if TYPE_CHECKING:
     from lamb.utils.sockets import ConnectionHandler
     from bot.mods.music.extractors.youtube import YoutubeExtractor
@@ -73,8 +71,11 @@ class ExtractorRequestHandler(BaseRequestHandler):
                 elif command == 'search':
                     info_list = extractor.search(text)
                     conn.send(pickle.dumps((info_list, None)))
-        except ExtractorException as error:
+        except Exception as error:
             conn.send(pickle.dumps((None, error)))
+        except BaseException as error:
+            conn.send(pickle.dumps((None, error)))
+            raise
 
     def handle(self, conn: ConnectionHandler, data: bytes):
         command, text = pickle.loads(data)

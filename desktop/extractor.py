@@ -6,8 +6,6 @@ import multiprocessing
 
 from lamb.utils.sockets import SocketServer, BaseRequestHandler
 
-from bot.mods.music.extractors.exceptions import ExtractorException
-
 if TYPE_CHECKING:
     from lamb.utils.sockets import ConnectionHandler
     from bot.mods.music.extractors.youtube import YoutubeExtractor
@@ -68,5 +66,8 @@ class ExtractorRequestHandler(BaseRequestHandler):
         command, text = pickle.loads(data)
         try:
             self.execute_command(conn, command, text)
-        except ExtractorException as error:
+        except Exception as error:
             conn.send(pickle.dumps((None, error)))
+        except BaseException as error:
+            conn.send(pickle.dumps((None, error)))
+            raise
